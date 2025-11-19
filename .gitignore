@@ -1,0 +1,20 @@
+# DFX artifacts
+/.dfx/
+**/.dfx/
+
+# Wasm build outputs
+*.wasm
+*.wasm.gz
+*.did.js
+*.did.d.ts
+
+# Node dependencies
+node_modules/
+
+# Rust build outputs
+target/
+
+# Candid/UI build
+dist/
+.build/
+
