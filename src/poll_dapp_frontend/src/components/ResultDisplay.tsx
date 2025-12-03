@@ -3,6 +3,7 @@ import React from 'react';
 interface ResultDisplayProps {
   yesVotes: number;
   noVotes: number;
+  resolutionId?: number;
 }
 
 const ResultDisplay: React.FC<ResultDisplayProps> = ({ yesVotes, noVotes }) => {

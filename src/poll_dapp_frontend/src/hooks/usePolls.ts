@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { fetchResolutions, submitVote } from '../utils/blockchain';
-import { Resolution } from '../types';
+import { fetchResolutions, voteOnResolution } from '../utils/blockchain';
+import { Resolution } from '../utils/blockchain';
 
 const usePolls = () => {
     const [resolutions, setResolutions] = useState<Resolution[]>([]);
@@ -22,10 +22,9 @@ const usePolls = () => {
         loadResolutions();
     }, []);
 
-    const voteOnResolution = async (resolutionId: string, vote: boolean) => {
+    const handleVote = async (resolutionId: number, vote: boolean) => {
         try {
-            await submitVote(resolutionId, vote);
-            // Optionally refresh resolutions after voting
+            await voteOnResolution(resolutionId, vote);
             const updatedResolutions = await fetchResolutions();
             setResolutions(updatedResolutions);
         } catch (err) {
@@ -33,7 +32,7 @@ const usePolls = () => {
         }
     };
 
-    return { resolutions, loading, error, voteOnResolution };
+    return { resolutions, loading, error, voteOnResolution: handleVote };
 };
 
 export default usePolls;

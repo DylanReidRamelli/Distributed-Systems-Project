@@ -16,6 +16,7 @@
     "src/poll_dapp_frontend"
   ],
   "dependencies": {
+    "@ethersproject/providers": "^5.8.0",
     "ethers": "^6.15.0",
     "react-router-dom": "^7.9.6"
   }
