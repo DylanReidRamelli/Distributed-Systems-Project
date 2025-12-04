@@ -1,20 +1,25 @@
-# DFX artifacts
-/.dfx/
-**/.dfx/
+# Various IDEs and Editors
+.vscode/
+.idea/
+**/*~
 
-# Wasm build outputs
-*.wasm
-*.wasm.gz
-*.did.js
-*.did.d.ts
+# Mac OSX temporary files
+.DS_Store
+**/.DS_Store
 
-# Node dependencies
-node_modules/
+# dfx temporary files
+.dfx/
 
-# Rust build outputs
+# generated files
+**/declarations/
+
+# rust
 target/
 
-# Candid/UI build
+# frontend code
+node_modules/
 dist/
-.build/
+.svelte-kit/
 
+# environment variables
+.env
