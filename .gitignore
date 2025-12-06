@@ -18,3 +18,12 @@ target/
 dist/
 .build/
 
+# Environment files
+.env
+.env.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,100 @@
+.home-page-container {
+  text-align: center;
+}
+
+.user-info-section {
+  background-color: #e3f2fd;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin: 2rem 0;
+  border: 2px solid #2196F3;
+}
+
+.current-user-text {
+  font-size: 1rem;
+  color: #1976d2;
+  margin: 0.5rem 0;
+}
+
+.switch-user-button {
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  margin: 0.5rem 0;
+  transition: background-color 0.2s;
+}
+
+.switch-user-button:hover {
+  background-color: #0b7dda;
+}
+
+.user-hint-text {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0.5rem 0 0 0;
+  font-style: italic;
+}
+
+.description-text {
+  font-size: 1.1rem;
+  color: #666;
+  margin: 1.5rem 0;
+  line-height: 1.6;
+}
+
+.action-buttons-container {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin: 2rem 0;
+}
+
+.action-button {
+  padding: 1rem 2rem;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  display: inline-block;
+}
+
+.create-button {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.create-button:hover {
+  background-color: #45a049;
+}
+
+.view-button {
+  background-color: #2196F3;
+  color: white;
+}
+
+.view-button:hover {
+  background-color: #0b7dda;
+}
+
+.info-section {
+  margin-top: 3rem;
+  text-align: left;
+  background-color: #f9f9f9;
+  padding: 1.5rem;
+  border-radius: 6px;
+}
+
+.info-list {
+  line-height: 1.8;
+}
+
+.info-list li {
+  margin: 0.5rem 0;
+}
+
