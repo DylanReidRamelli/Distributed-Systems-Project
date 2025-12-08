@@ -76,3 +76,4 @@ npm run dev
 # Cleanup on exit
 trap "kill $BACKEND_PID 2>/dev/null; exit" INT TERM
 
+

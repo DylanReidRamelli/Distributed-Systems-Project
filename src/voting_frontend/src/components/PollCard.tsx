@@ -17,10 +17,8 @@ const PollCard: React.FC<PollCardProps> = ({ pollData, onVote, isVoting }) => {
     onVote(pollData.pollId, false);
   };
 
-  // Calculate total votes for display
   const totalVotesCount = pollData.yesVoteCount + pollData.noVoteCount;
   
-  // This variable is defined but might not be used in all cases
   const percentageYes = totalVotesCount > 0 
     ? Math.round((pollData.yesVoteCount / totalVotesCount) * 100) 
     : 0;

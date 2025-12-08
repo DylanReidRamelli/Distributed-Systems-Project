@@ -1,26 +1,22 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-// Use local backend server (simulating IC, no DFX needed)
 import { createNewPoll } from '../utils/localBackend';
 import './CreatePollPage.css';
 
 const CreatePollPage: React.FC = () => {
   const navigate = useNavigate();
   
-  // State for form inputs
   const [pollTitleInput, setPollTitleInput] = useState('');
   const [pollDescriptionInput, setPollDescriptionInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // This variable might be useful later but not using it right now
   const unusedVariableForFutureUse = null;
 
   const handleFormSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     
-    // Basic validation
     if (pollTitleInput.trim() === '') {
       setErrorMessage('Poll title cannot be empty');
       return;
@@ -36,17 +32,13 @@ const CreatePollPage: React.FC = () => {
     setSuccessMessage(null);
 
     try {
-      // Call backend to create poll
       const newPollId = await createNewPoll(pollTitleInput, pollDescriptionInput);
       
-      // Success!
       setSuccessMessage(`Poll created successfully! Poll ID: ${newPollId}`);
       
-      // Clear form
       setPollTitleInput('');
       setPollDescriptionInput('');
       
-      // Redirect to polls page after a short delay
       setTimeout(() => {
         navigate('/polls');
       }, 2000);

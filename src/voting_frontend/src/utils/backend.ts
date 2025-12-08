@@ -1,13 +1,10 @@
-// This file handles communication with the backend
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { voting_backend } from '../../../declarations/voting_backend';
 
-// Create actor instance - this is how we talk to the backend
 export const getBackendActor = () => {
   return voting_backend;
 };
 
-// Type definitions that match our Motoko backend
 export type Poll = {
   pollId: number;
   pollTitle: string;
@@ -18,7 +15,6 @@ export type Poll = {
   noVoteCount: number;
 };
 
-// Function to get all polls
 export async function getAllPollsFromBackend(): Promise<Poll[]> {
   try {
     const actor = getBackendActor();
@@ -30,7 +26,6 @@ export async function getAllPollsFromBackend(): Promise<Poll[]> {
   }
 }
 
-// Function to create a new poll
 export async function createNewPoll(pollTitle: string, pollDescription: string): Promise<number> {
   try {
     const actor = getBackendActor();
@@ -42,7 +37,6 @@ export async function createNewPoll(pollTitle: string, pollDescription: string):
   }
 }
 
-// Function to vote on a poll
 export async function submitVoteOnPoll(pollId: number, voteChoice: boolean): Promise<boolean> {
   try {
     const actor = getBackendActor();
@@ -54,7 +48,6 @@ export async function submitVoteOnPoll(pollId: number, voteChoice: boolean): Pro
   }
 }
 
-// Helper function to get a single poll by ID
 export async function getPollByIdFromBackend(pollId: number): Promise<Poll | null> {
   try {
     const actor = getBackendActor();
@@ -69,12 +62,9 @@ export async function getPollByIdFromBackend(pollId: number): Promise<Poll | nul
   }
 }
 
-// Get current user's Principal ID (for display purposes)
 export async function getCurrentPrincipal(): Promise<string> {
   try {
     const { HttpAgent } = await import('@dfinity/agent');
-    // Create a temporary agent to get the principal
-    // In production, this would use the authenticated agent from the actor
     const agent = new HttpAgent({ host: 'http://localhost:4943' });
     await agent.fetchRootKey();
     const principal = agent.getPrincipal();
@@ -84,7 +74,6 @@ export async function getCurrentPrincipal(): Promise<string> {
     return 'Anonymous';
   } catch (error) {
     console.error('Error getting principal:', error);
-    // Return a placeholder - in real IC app, this would come from authenticated identity
     return 'Anonymous (use IC identity)';
   }
 }

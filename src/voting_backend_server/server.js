@@ -1,33 +1,22 @@
-// Local server to simulate Internet Computer backend
-// This allows running the distributed system without DFX
 const express = require('express');
 const cors = require('cors');
 const app = express();
 const PORT = 4943;
 
-// In-memory storage (simulating IC's stable storage)
-// In real IC, this would be replicated across nodes
 let polls = [];
 let nextPollId = 1;
-let votersByPollId = {}; // { pollId: [principalIds] }
+let votersByPollId = {};
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Generate a simple principal ID for demo
 function generatePrincipal() {
   return 'principal_' + Math.random().toString(36).substr(2, 16);
 }
 
-// Get principal from request (simulating IC's caller)
 function getCallerPrincipal(req) {
-  // In real IC, this comes from authenticated identity
-  // For demo, we use a header or generate one
   return req.headers['x-principal'] || generatePrincipal();
 }
-
-// Create a new poll
 app.post('/api/createPoll', (req, res) => {
   try {
     const { pollTitle, pollDescription } = req.body;
@@ -54,7 +43,6 @@ app.post('/api/createPoll', (req, res) => {
   }
 });
 
-// Get all polls
 app.get('/api/getAllPolls', (req, res) => {
   try {
     console.log(`[DISTRIBUTED] Fetching all polls (${polls.length} total)`);
@@ -65,7 +53,6 @@ app.get('/api/getAllPolls', (req, res) => {
   }
 });
 
-// Get poll by ID
 app.get('/api/getPollById/:id', (req, res) => {
   try {
     const pollId = parseInt(req.params.id);
@@ -82,7 +69,6 @@ app.get('/api/getPollById/:id', (req, res) => {
   }
 });
 
-// Vote on a poll
 app.post('/api/voteOnPoll', (req, res) => {
   try {
     const { pollId, voteChoice } = req.body;
@@ -94,7 +80,6 @@ app.post('/api/voteOnPoll', (req, res) => {
       return res.json({ success: false, error: 'Poll not found' });
     }
     
-    // Check if user already voted (prevent double voting)
     if (!votersByPollId[pollId]) {
       votersByPollId[pollId] = [];
     }
@@ -104,14 +89,12 @@ app.post('/api/voteOnPoll', (req, res) => {
       return res.json({ success: false, error: 'Already voted' });
     }
     
-    // Update vote count
     if (voteChoice) {
       polls[pollIndex].yesVoteCount += 1;
     } else {
       polls[pollIndex].noVoteCount += 1;
     }
     
-    // Record vote
     votersByPollId[pollId].push(caller);
     
     console.log(`[DISTRIBUTED] Vote recorded: ${caller} voted ${voteChoice ? 'Yes' : 'No'} on poll ${pollId}`);
@@ -122,13 +105,11 @@ app.post('/api/voteOnPoll', (req, res) => {
   }
 });
 
-// Get current principal (for display)
 app.get('/api/getPrincipal', (req, res) => {
   const principal = getCallerPrincipal(req);
   res.json({ principal: principal });
 });
 
-// Health check
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 

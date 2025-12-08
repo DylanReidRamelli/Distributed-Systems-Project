@@ -1,7 +1,3 @@
-// Local backend API client (simulating IC backend)
-// This connects to a local Express server instead of IC
-// This allows running without DFX while still demonstrating distributed system concepts
-
 export type Poll = {
   pollId: number;
   pollTitle: string;
@@ -14,7 +10,6 @@ export type Poll = {
 
 const API_BASE = 'http://localhost:4943/api';
 
-// Generate and store a principal ID for this session
 function getPrincipal(): string {
   let principal = sessionStorage.getItem('demo_principal');
   if (!principal) {
@@ -24,7 +19,6 @@ function getPrincipal(): string {
   return principal;
 }
 
-// Make API request with principal header
 async function apiRequest(endpoint: string, options: RequestInit = {}) {
   const principal = getPrincipal();
   const headers = {
@@ -45,7 +39,6 @@ async function apiRequest(endpoint: string, options: RequestInit = {}) {
   return response.json();
 }
 
-// Get all polls
 export async function getAllPollsFromBackend(): Promise<Poll[]> {
   try {
     const polls = await apiRequest('/getAllPolls');
@@ -56,7 +49,6 @@ export async function getAllPollsFromBackend(): Promise<Poll[]> {
   }
 }
 
-// Create a new poll
 export async function createNewPoll(pollTitle: string, pollDescription: string): Promise<number> {
   try {
     const result = await apiRequest('/createPoll', {
@@ -70,7 +62,6 @@ export async function createNewPoll(pollTitle: string, pollDescription: string):
   }
 }
 
-// Vote on a poll
 export async function submitVoteOnPoll(pollId: number, voteChoice: boolean): Promise<boolean> {
   try {
     const result = await apiRequest('/voteOnPoll', {
@@ -84,7 +75,6 @@ export async function submitVoteOnPoll(pollId: number, voteChoice: boolean): Pro
   }
 }
 
-// Get a single poll by ID
 export async function getPollByIdFromBackend(pollId: number): Promise<Poll | null> {
   try {
     const poll = await apiRequest(`/getPollById/${pollId}`);
@@ -95,14 +85,14 @@ export async function getPollByIdFromBackend(pollId: number): Promise<Poll | nul
   }
 }
 
-// Get current principal ID
 export async function getCurrentPrincipal(): Promise<string> {
   try {
     const result = await apiRequest('/getPrincipal');
     return result.principal;
   } catch (error) {
     console.error('Error getting principal:', error);
-    return getPrincipal(); // Fallback to session storage
+    return getPrincipal();
   }
 }
+
 

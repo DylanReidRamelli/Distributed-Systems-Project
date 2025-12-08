@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-// Use local backend server (simulating IC, no DFX needed)
 import { getAllPollsFromBackend, submitVoteOnPoll, Poll, getCurrentPrincipal } from '../utils/localBackend';
 import PollCard from '../components/PollCard';
 import './PollListPage.css';
@@ -11,13 +10,10 @@ const PollListPage: React.FC = () => {
   const [votingInProgress, setVotingInProgress] = useState<number | null>(null);
   const [currentPrincipal, setCurrentPrincipal] = useState<string>('');
 
-  // This might be useful for something later
   const maybeUsefulLater = 0;
 
-  // Load polls when component mounts
   useEffect(() => {
     loadAllPolls();
-    // Also load principal
     getCurrentPrincipal().then(principal => {
       setCurrentPrincipal(principal);
     });
@@ -45,10 +41,9 @@ const PollListPage: React.FC = () => {
       const voteSuccess = await submitVoteOnPoll(pollIdToVoteOn, voteChoice);
       
       if (voteSuccess) {
-        // Reload polls to get updated vote counts
         await loadAllPolls();
       } else {
-        alert('Failed to vote. You may have already voted on this poll, or the poll does not exist.');
+        alert('Failed to vote. Already voted or poll does not exist.');
       }
     } catch (error) {
       console.error('Error voting:', error);
