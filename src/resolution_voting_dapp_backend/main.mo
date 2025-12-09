@@ -39,6 +39,7 @@ persistent actor {
 
   // balances: (Principal, TokenType, Nat) list
   stable var balances : [(Principal, TokenType, Nat)] = [];
+  stable var votersByResolution : [(ResolutionId, [Principal])] = []; // Saves the voters who has voted
 
   // ---------- Helpers ----------
 
@@ -119,6 +120,51 @@ persistent actor {
         balances := acc;
       };
     }
+  };
+
+// prevents double voting: add hash for votes and rocord voters
+// functions to check double voting
+  func hasVoted(id : ResolutionId, who : Principal) : Bool {
+    var i : Nat = 0;
+    let n = votersByResolution.size();
+    while (i < n) {
+      let (rid, voters) = votersByResolution[i];
+      if (rid == id) {
+        var j : Nat = 0;
+        let m = voters.size();
+        while (j < m) {
+          if (Principal.equal(voters[j], who)) {
+            return true;
+          };
+          j += 1;
+        };
+        return false;
+      };
+      i += 1;
+    };
+    false;
+  };
+
+  func addVoter(id : ResolutionId, who : Principal) {
+    var i : Nat = 0;
+    let n = votersByResolution.size();
+    var found : Bool = false;
+    var updated : [(ResolutionId, [Principal])] = [];
+    while (i < n) {
+      let (rid, voters) = votersByResolution[i];
+      if (rid == id) {
+        found := true;
+        let newVoters = Array.append<Principal>(voters, [who]);
+        updated := Array.append<(ResolutionId, [Principal])>(updated, [(rid, newVoters)]);
+      } else {
+        updated := Array.append<(ResolutionId, [Principal])>(updated, [(rid, voters)]);
+      };
+      i += 1;
+    };
+    if (not found) {
+      updated := Array.append<(ResolutionId, [Principal])>(updated, [(id, [who])]);
+    };
+    votersByResolution := updated;
   };
 
   // ---------- Public API ----------
@@ -214,6 +260,9 @@ persistent actor {
         return #err("Resolution not found");
       };
       case (?idx) {
+        if (hasVoted(id, caller)) {
+          return #err("You has already voted for this post");
+        };
         let r = resolutions[idx];
 
         // spend tokens
@@ -259,6 +308,7 @@ persistent actor {
         };
 
         replaceResolutionAt(idx, updated);
+        addVoter(id, caller);
         #ok(updated);
       };
     };
