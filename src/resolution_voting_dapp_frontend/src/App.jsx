@@ -1,13 +1,42 @@
 import React, { useEffect, useState } from 'react';
-// import './App.css';
-import { resolution_voting_dapp_backend } from 'declarations/resolution_voting_dapp_backend';
+import { Ed25519KeyIdentity } from '@dfinity/identity';
+import {
+  resolution_voting_dapp_backend as anonActor,
+  createActor,
+  canisterId,
+} from 'declarations/resolution_voting_dapp_backend';
+import { Actor, HttpAgent } from '@dfinity/agent';
 
 const TOKEN_TYPES = [
   { label: 'Circle', value: 'Circle', emoji: '⚪️', weight: 1 },
-  { label: 'Square', value: 'Square', emoji: '🟦', weight: 10 }
+  { label: 'Square', value: 'Square', emoji: '🟦', weight: 10 },
 ];
 
+const profiles = {};
+
+function createProfile(name) {
+  const id = Ed25519KeyIdentity.generate();
+  profiles[name] = id;
+  return id;
+}
+
+async function switchProfile(name) {
+  const identity = profiles[name] || createProfile(name);
+  const agent = new HttpAgent({ identity, host: window.location.origin });
+  
+  if (process.env.DFX_NETWORK !== 'ic') {
+    await agent.fetchRootKey();
+  }
+  
+  const actor = createActor(canisterId, { agent });
+  return { actor, identity };
+}
+
 const App = () => {
+  const [actor, setActor] = useState(anonActor);
+  const [currentProfile, setCurrentProfile] = useState('User 1');
+  const [principalText, setPrincipalText] = useState('');
+
   const [activeResolutions, setActiveResolutions] = useState([]);
   const [expiredResolutions, setExpiredResolutions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -16,7 +45,7 @@ const App = () => {
 
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [newDuration, setNewDuration] = useState(60); // default 60 seconds
+  const [newDuration, setNewDuration] = useState(60);
 
   const [voteAmount, setVoteAmount] = useState('');
   const [voteChoice, setVoteChoice] = useState('For');
@@ -26,18 +55,31 @@ const App = () => {
   const showLoading = () => setLoading(true);
   const hideLoading = () => setLoading(false);
 
-  const loadData = async () => {
+  // ---- Switch profile ----
+  const handleSwitchProfile = async (profileName) => {
     try {
-      console.log('Loading data...');
+      showLoading();
+      const { actor: newActor, identity } = await switchProfile(profileName);
+      setActor(newActor);
+      setCurrentProfile(profileName);
+      setPrincipalText(identity.getPrincipal().toText());
+      await loadData(newActor);
+    } catch (err) {
+      console.error('Error switching profile', err);
+    } finally {
+      hideLoading();
+    }
+  };
+
+  // ---- Data loading ----
+  const loadData = async (whichActor = actor) => {
+    try {
       showLoading();
       const [activeRes, expiredRes, myBals] = await Promise.all([
-        resolution_voting_dapp_backend.listActiveResolutions(),
-        resolution_voting_dapp_backend.listExpiredResolutions(),
-        resolution_voting_dapp_backend.getMyBalances()
+        whichActor.listActiveResolutions(),
+        whichActor.listExpiredResolutions(),
+        whichActor.getMyBalances(),
       ]);
-      console.log('Active resolutions loaded:', activeRes);
-      console.log('Expired resolutions loaded:', expiredRes);
-      console.log('Balances loaded:', myBals);
       setActiveResolutions(activeRes);
       setExpiredResolutions(expiredRes);
       setBalances(myBals);
@@ -53,31 +95,23 @@ const App = () => {
   };
 
   useEffect(() => {
-    console.log('Component mounted, loading data...');
-    loadData();
-    
-    // Refresh every 5 seconds to update expired resolutions
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
+    (async () => {
+      // Initialize with User 1
+      await handleSwitchProfile('User 1');
+    })();
   }, []);
 
-  const handleFaucet = async () => {
-    try {
-      showLoading();
-      await resolution_voting_dapp_backend.faucet();
-      await loadData(); // Refresh data after faucet
-    } catch (err) {
-      console.error('Error calling faucet', err);
-    } finally {
-      hideLoading();
-    }
-  };
+  useEffect(() => {
+    const interval = setInterval(() => loadData(actor), 5000);
+    return () => clearInterval(interval);
+  }, [actor]);
 
+  // ---- Actions ----
   const handleFaucetCircle = async () => {
     try {
       showLoading();
-      await resolution_voting_dapp_backend.faucetCircle();
-      await loadData(); // Refresh data after faucet
+      await actor.faucetCircle();
+      await loadData();
     } catch (err) {
       console.error('Error calling circle faucet', err);
     } finally {
@@ -88,8 +122,8 @@ const App = () => {
   const handleFaucetSquare = async () => {
     try {
       showLoading();
-      await resolution_voting_dapp_backend.faucetSquare();
-      await loadData(); // Refresh data after faucet
+      await actor.faucetSquare();
+      await loadData();
     } catch (err) {
       console.error('Error calling square faucet', err);
     } finally {
@@ -104,7 +138,6 @@ const App = () => {
       alert('Title cannot be empty');
       return;
     }
-
     const duration = Number(newDuration);
     if (duration < 1 || duration > 600) {
       alert('Duration must be between 1 and 600 seconds (10 minutes)');
@@ -113,7 +146,7 @@ const App = () => {
 
     try {
       showLoading();
-      const result = await resolution_voting_dapp_backend.createResolution(title, desc, duration);
+      const result = await actor.createResolution(title, desc, duration);
       if ('err' in result) {
         alert(`Error: ${result.err}`);
       } else {
@@ -136,28 +169,19 @@ const App = () => {
       return;
     }
 
-    let choiceVariant;
-    if (voteChoice === 'For') {
-      choiceVariant = { For: null };
-    } else if (voteChoice === 'Against') {
-      choiceVariant = { Against: null };
-    } else {
-      choiceVariant = { Abstain: null };
-    }
+    let choiceVariant =
+      voteChoice === 'For'
+        ? { For: null }
+        : voteChoice === 'Against'
+        ? { Against: null }
+        : { Abstain: null };
 
-    let tokenVariant;
-    if (voteTokenType === 'Circle') {
-      tokenVariant = { Circle: null };
-    } else if (voteTokenType === 'Square') {
-      tokenVariant = { Square: null };
-    } else {
-      alert('Invalid token type');
-      return;
-    }
+    let tokenVariant =
+      voteTokenType === 'Circle' ? { Circle: null } : { Square: null };
 
     try {
       showLoading();
-      const result = await resolution_voting_dapp_backend.voteResolution(
+      const result = await actor.voteResolution(
         resolutionId,
         choiceVariant,
         tokenVariant,
@@ -174,11 +198,6 @@ const App = () => {
     } finally {
       hideLoading();
     }
-  };
-
-  const getTokenWeight = (tokenType) => {
-    const token = TOKEN_TYPES.find(t => t.value === tokenType);
-    return token ? token.weight : 1;
   };
 
   const renderResolutions = (resolutions, isExpired = false) => {
@@ -278,6 +297,19 @@ const App = () => {
   return (
     <div className="app-container">
       <h1>Resolution Voting Dapp</h1>
+
+      <div className="auth-bar" style={{ marginBottom: '1rem' }}>
+        <span>Current user: {currentProfile}</span>
+        <span style={{ marginLeft: '1rem', fontSize: '0.85rem', color: '#888' }}>
+          Principal: {principalText.slice(0, 15)}...
+        </span>
+        <div style={{ marginLeft: '1rem' }}>
+          <button onClick={() => handleSwitchProfile('User 1')}>User 1</button>
+          <button onClick={() => handleSwitchProfile('User 2')} style={{ marginLeft: '0.5rem' }}>User 2</button>
+          <button onClick={() => handleSwitchProfile('User 3')} style={{ marginLeft: '0.5rem' }}>User 3</button>
+        </div>
+      </div>
+
       <p style={{ maxWidth: 600, margin: "0 auto 1.5em auto", color: "#444" }}>
         This app lets you create resolutions with timers, receive different types of tokens with different weights, 
         and vote on resolutions. Circle tokens have weight 1, Square tokens have weight 10.
