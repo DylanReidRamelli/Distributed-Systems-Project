@@ -38,7 +38,16 @@ persistent actor {
   stable var resolutions : [Resolution] = [];
   stable var nextId : ResolutionId = 0;
   stable var balances : [(Principal, TokenType, Nat)] = [];
-  stable var votersByResolution : [(ResolutionId, [Principal])] = [];
+  public type VoteRecord = {
+    voter : Principal;
+    choice : VoteChoice;
+    token : TokenType;
+    amount : Nat;
+    weight : Nat;
+    timestamp : Nat64;
+  };
+
+  stable var votersByResolution : [(ResolutionId, [VoteRecord])] = [];
 
   // ---------- Helpers ----------
 
@@ -132,12 +141,12 @@ persistent actor {
     var i : Nat = 0;
     let n = votersByResolution.size();
     while (i < n) {
-      let (resId, voters) = votersByResolution[i];
+      let (resId, votes) = votersByResolution[i];
       if (resId == id) {
         var j : Nat = 0;
-        let m = voters.size();
+        let m = votes.size();
         while (j < m) {
-          if (voters[j] == who) {
+          if (votes[j].voter == who) {
             return true;
           };
           j += 1;
@@ -148,28 +157,39 @@ persistent actor {
     false;
   };
 
-  func addVoter(id : ResolutionId, who : Principal) {
+  func addVoterRecord(id : ResolutionId, vote : VoteRecord) {
     var found = false;
     var i : Nat = 0;
     let n = votersByResolution.size();
-    var acc : [(ResolutionId, [Principal])] = [];
+    var acc : [(ResolutionId, [VoteRecord])] = [];
     while (i < n) {
-      let (resId, voters) = votersByResolution[i];
+      let (resId, votes) = votersByResolution[i];
       if (resId == id) {
         found := true;
-        acc := Array.append<(ResolutionId, [Principal])>(
+        acc := Array.append<(ResolutionId, [VoteRecord])>(
           acc,
-          [(resId, Array.append<Principal>(voters, [who]))]
+          [(resId, Array.append<VoteRecord>(votes, [vote]))]
         );
       } else {
-        acc := Array.append<(ResolutionId, [Principal])>(acc, [(resId, voters)]);
+        acc := Array.append<(ResolutionId, [VoteRecord])>(acc, [(resId, votes)]);
       };
       i += 1;
     };
     if (not found) {
-      acc := Array.append<(ResolutionId, [Principal])>(acc, [(id, [who])]);
+      acc := Array.append<(ResolutionId, [VoteRecord])>(acc, [(id, [vote])]);
     };
     votersByResolution := acc;
+  };
+
+  func getVotesFor(id : ResolutionId) : [VoteRecord] {
+    var i : Nat = 0;
+    let n = votersByResolution.size();
+    while (i < n) {
+      let (resId, votes) = votersByResolution[i];
+      if (resId == id) { return votes; };
+      i += 1;
+    };
+    [];
   };
 
   func isExpired(r : Resolution) : Bool {
@@ -298,8 +318,17 @@ persistent actor {
         // Spend tokens
         setBalance(caller, token, bal - amount);
 
-        // Record voter
-        addVoter(id, caller);
+        // Record voter (store full vote record)
+        let now = nowNs();
+        let voteRec : VoteRecord = {
+          voter = caller;
+          choice = choice;
+          token = token;
+          amount = amount;
+          weight = voteWeight;
+          timestamp = now;
+        };
+        addVoterRecord(id, voteRec);
 
         let updated : Resolution = switch (choice) {
           case (#For) {
@@ -345,6 +374,22 @@ persistent actor {
 
         replaceResolutionAt(idx, updated);
         #ok(updated);
+      };
+    };
+  };
+
+  /// Return vote records for a given resolution, only after it has expired.
+  public query func getVotesForResolution(id : ResolutionId) : async { #ok : [VoteRecord]; #err : Text } {
+    switch (findResolutionIndex(id)) {
+      case (null) { #err("Resolution not found") };
+      case (?idx) {
+        let r = resolutions[idx];
+        if (not isExpired(r)) {
+          return #err("Resolution is still active");
+        } else {
+          let votes = getVotesFor(id);
+          #ok(votes);
+        };
       };
     };
   };

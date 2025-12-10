@@ -39,6 +39,8 @@ const App = () => {
 
   const [activeResolutions, setActiveResolutions] = useState([]);
   const [expiredResolutions, setExpiredResolutions] = useState([]);
+  const [votesByResolution, setVotesByResolution] = useState({}); // id -> votes array or null
+  const [votesVisible, setVotesVisible] = useState({}); // id -> bool
   const [loading, setLoading] = useState(false);
   const [balances, setBalances] = useState([]);
   const [balance, setBalance] = useState(0);
@@ -240,6 +242,68 @@ const App = () => {
                 <strong>Against:</strong> {Number(r.against_weight)} &nbsp;
                 <strong>Abstain:</strong> {Number(r.abstain_weight)}
               </p>
+              {isExpired && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <button
+                    onClick={async () => {
+                      const key = String(id);
+                      const currentlyVisible = !!votesVisible[key];
+                      // toggle visibility
+                      setVotesVisible((prev) => ({ ...prev, [key]: !currentlyVisible }));
+                      if (!currentlyVisible && !votesByResolution[key]) {
+                        // load votes
+                        try {
+                          showLoading();
+                          const res = await actor.getVotesForResolution(id);
+                          if ('err' in res) {
+                            alert(`Error: ${res.err}`);
+                            setVotesByResolution((prev) => ({ ...prev, [key]: [] }));
+                          } else {
+                            setVotesByResolution((prev) => ({ ...prev, [key]: res.ok }));
+                          }
+                        } catch (err) {
+                          console.error('Error fetching votes', err);
+                          setVotesByResolution((prev) => ({ ...prev, [key]: [] }));
+                        } finally {
+                          hideLoading();
+                        }
+                      }
+                    }}
+                  >
+                    {votesVisible[String(id)] ? 'Hide votes' : 'Show votes'}
+                  </button>
+                  {votesVisible[String(id)] && votesByResolution[String(id)] && (
+                    <div className="votes-list" style={{ marginTop: '0.5rem' }}>
+                      <h4>Votes</h4>
+                      {votesByResolution[String(id)].length === 0 ? (
+                        <p>No votes recorded.</p>
+                      ) : (
+                        <ul>
+                          {votesByResolution[String(id)].map((v, idx) => {
+                            let voterText = '';
+                            try {
+                              voterText = v.voter.toText ? v.voter.toText() : String(v.voter);
+                            } catch (e) {
+                              voterText = String(v.voter);
+                            }
+                            const choice = v.choice.hasOwnProperty('For')
+                              ? 'For'
+                              : v.choice.hasOwnProperty('Against')
+                              ? 'Against'
+                              : 'Abstain';
+                            const token = v.token.hasOwnProperty('Circle') ? 'Circle' : 'Square';
+                            return (
+                              <li key={idx}>
+                                <strong>{voterText}</strong>: {choice} — {token} x {Number(v.amount)} (weight: {Number(v.weight)})
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               {!isExpired && (
                 <div className="vote-form">
                   <label>
