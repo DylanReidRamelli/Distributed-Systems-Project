@@ -3,22 +3,21 @@ import React, { useEffect, useState } from 'react';
 import { resolution_voting_dapp_backend } from 'declarations/resolution_voting_dapp_backend';
 
 const TOKEN_TYPES = [
-  { label: 'Circle', value: 'Circle', emoji: '⚪️' },
-  { label: 'Square', value: 'Square', emoji: '🟦' }
+  { label: 'Circle', value: 'Circle', emoji: '⚪️', weight: 1 },
+  { label: 'Square', value: 'Square', emoji: '🟦', weight: 10 }
 ];
 
 const App = () => {
-  const [resolutions, setResolutions] = useState([]);
+  const [activeResolutions, setActiveResolutions] = useState([]);
+  const [expiredResolutions, setExpiredResolutions] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  // Balances: array of [tokenType, amount]
   const [balances, setBalances] = useState([]);
-  const [balance, setBalance] = useState(0); // legacy, can remove later
+  const [balance, setBalance] = useState(0);
 
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
+  const [newDuration, setNewDuration] = useState(60); // default 60 seconds
 
-  // Voting state
   const [voteAmount, setVoteAmount] = useState('');
   const [voteChoice, setVoteChoice] = useState('For');
   const [voteTokenType, setVoteTokenType] = useState('Circle');
@@ -29,24 +28,37 @@ const App = () => {
 
   const loadData = async () => {
     try {
+      console.log('Loading data...');
       showLoading();
-      const [resList, myBals] = await Promise.all([
-        resolution_voting_dapp_backend.listResolutions(),
+      const [activeRes, expiredRes, myBals] = await Promise.all([
+        resolution_voting_dapp_backend.listActiveResolutions(),
+        resolution_voting_dapp_backend.listExpiredResolutions(),
         resolution_voting_dapp_backend.getMyBalances()
       ]);
-      setResolutions(resList);
+      console.log('Active resolutions loaded:', activeRes);
+      console.log('Expired resolutions loaded:', expiredRes);
+      console.log('Balances loaded:', myBals);
+      setActiveResolutions(activeRes);
+      setExpiredResolutions(expiredRes);
       setBalances(myBals);
-      // Optionally, setBalance to sum of all tokens
       setBalance(myBals.reduce((acc, [_, amt]) => acc + Number(amt), 0));
     } catch (err) {
       console.error('Error loading data', err);
+      setActiveResolutions([]);
+      setExpiredResolutions([]);
+      setBalances([]);
     } finally {
       hideLoading();
     }
   };
 
   useEffect(() => {
-    loadData(); // Load resolutions on page load
+    console.log('Component mounted, loading data...');
+    loadData();
+    
+    // Refresh every 5 seconds to update expired resolutions
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleFaucet = async () => {
@@ -93,16 +105,22 @@ const App = () => {
       return;
     }
 
+    const duration = Number(newDuration);
+    if (duration < 1 || duration > 600) {
+      alert('Duration must be between 1 and 600 seconds (10 minutes)');
+      return;
+    }
+
     try {
       showLoading();
-      // Pass both title and description
-      const result = await resolution_voting_dapp_backend.createResolution(title, desc);
+      const result = await resolution_voting_dapp_backend.createResolution(title, desc, duration);
       if ('err' in result) {
         alert(`Error: ${result.err}`);
       } else {
         setNewTitle('');
         setNewDescription('');
-        await loadData(); // Refresh resolutions after creating
+        setNewDuration(60);
+        await loadData();
       }
     } catch (err) {
       console.error('Error creating resolution', err);
@@ -118,7 +136,6 @@ const App = () => {
       return;
     }
 
-    // Map string to Motoko variant
     let choiceVariant;
     if (voteChoice === 'For') {
       choiceVariant = { For: null };
@@ -128,7 +145,6 @@ const App = () => {
       choiceVariant = { Abstain: null };
     }
 
-    // Map token type string to Motoko variant
     let tokenVariant;
     if (voteTokenType === 'Circle') {
       tokenVariant = { Circle: null };
@@ -151,7 +167,7 @@ const App = () => {
         alert(`Error: ${result.err}`);
       } else {
         setVoteAmount('');
-        await loadData(); // Refresh resolutions after voting
+        await loadData();
       }
     } catch (err) {
       console.error('Error voting', err);
@@ -160,71 +176,98 @@ const App = () => {
     }
   };
 
-  const renderResolutions = () => {
+  const getTokenWeight = (tokenType) => {
+    const token = TOKEN_TYPES.find(t => t.value === tokenType);
+    return token ? token.weight : 1;
+  };
+
+  const renderResolutions = (resolutions, isExpired = false) => {
     if (!resolutions || resolutions.length === 0) {
-      return <p>No resolutions yet. Create one!</p>;
+      return <p>No {isExpired ? 'completed' : 'active'} resolutions yet.</p>;
     }
 
     return (
       <ul className="resolution-list">
         {resolutions.map((r) => {
           const id = Number(r.id);
+          const timeLeft = Number(r.expires_at) - Date.now() * 1_000_000;
+          const secondsLeft = Math.max(0, Math.floor(timeLeft / 1_000_000_000));
+          const mins = Math.floor(secondsLeft / 60);
+          const secs = secondsLeft % 60;
+          const timeText = `${mins}:${secs.toString().padStart(2, '0')}`;
+          const timerClass = !isExpired && secondsLeft <= 20 ? 'timer warning' : 'timer';
+
+          const passed = isExpired && Number(r.for_weight) > Number(r.against_weight);
+          const itemClass = isExpired
+            ? `resolution-item completed ${passed ? 'passed' : 'failed'}`
+            : 'resolution-item';
+
           return (
-            <li key={id} className="resolution-item">
+            <li key={id} className={itemClass}>
               <h3>{r.title}</h3>
               <p>{r.description}</p>
+              {!isExpired && (
+                <p className={timerClass}>
+                  <strong>Time left:</strong> {timeText}
+                </p>
+              )}
+              {isExpired && (
+                <p className={`status-chip ${passed ? 'passed' : 'failed'}`}>
+                  {passed ? 'Passed' : 'Failed'}
+                </p>
+              )}
               <p>
                 <strong>For:</strong> {Number(r.for_weight)} &nbsp;
                 <strong>Against:</strong> {Number(r.against_weight)} &nbsp;
                 <strong>Abstain:</strong> {Number(r.abstain_weight)}
               </p>
-              <div className="vote-form">
-                <label>
-                  Vote type:{' '}
-                  <select
-                    value={selectedResolutionId === id ? voteChoice : voteChoice}
-                    onChange={(e) => {
-                      setSelectedResolutionId(id);
-                      setVoteChoice(e.target.value);
-                    }}
-                  >
-                    <option value="For">For</option>
-                    <option value="Against">Against</option>
-                    <option value="Abstain">Abstain</option>
-                  </select>
-                </label>
-                <label>
-                  Token type:{' '}
-                  <select
-                    value={selectedResolutionId === id ? voteTokenType : voteTokenType}
-                    onChange={(e) => {
-                      setSelectedResolutionId(id);
-                      setVoteTokenType(e.target.value);
-                    }}
-                  >
-                    {TOKEN_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {t.emoji} {t.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Amount:{' '}
-                  <input
-                    type="number"
-                    min="1"
-                    value={selectedResolutionId === id ? voteAmount : ''}
-                    onChange={(e) => {
-                      setSelectedResolutionId(id);
-                      setVoteAmount(e.target.value);
-                    }}
-                  />
-                </label>
-                <button onClick={() => handleVote(id)}>
-                  Vote
-                </button>
-              </div>
+              {!isExpired && (
+                <div className="vote-form">
+                  <label>
+                    Vote type:{' '}
+                    <select
+                      value={selectedResolutionId === id ? voteChoice : voteChoice}
+                      onChange={(e) => {
+                        setSelectedResolutionId(id);
+                        setVoteChoice(e.target.value);
+                      }}
+                    >
+                      <option value="For">For</option>
+                      <option value="Against">Against</option>
+                      <option value="Abstain">Abstain</option>
+                    </select>
+                  </label>
+                  <label>
+                    Token type:{' '}
+                    <select
+                      value={selectedResolutionId === id ? voteTokenType : voteTokenType}
+                      onChange={(e) => {
+                        setSelectedResolutionId(id);
+                        setVoteTokenType(e.target.value);
+                      }}
+                    >
+                      {TOKEN_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.emoji} {t.label} (weight: {t.weight})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Amount:{' '}
+                    <input
+                      type="number"
+                      min="1"
+                      value={selectedResolutionId === id ? voteAmount : ''}
+                      onChange={(e) => {
+                        setSelectedResolutionId(id);
+                        setVoteAmount(e.target.value);
+                      }}
+                    />
+                  </label>
+                  <button onClick={() => handleVote(id)}>Vote</button>
+                </div>
+              )}
             </li>
           );
         })}
@@ -236,14 +279,12 @@ const App = () => {
     <div className="app-container">
       <h1>Resolution Voting Dapp</h1>
       <p style={{ maxWidth: 600, margin: "0 auto 1.5em auto", color: "#444" }}>
-        This app lets you create resolutions, receive different types of tokens, and vote on resolutions using your tokens. 
-        Each token type has a different value. Use the buttons to add tokens to your balance, create new resolutions, and participate in voting by selecting your preferred token and vote type.
+        This app lets you create resolutions with timers, receive different types of tokens with different weights, 
+        and vote on resolutions. Circle tokens have weight 1, Square tokens have weight 10.
       </p>
 
       <section className="balance-section">
-        <p>
-          <strong>Your token balances:</strong>
-        </p>
+        <p><strong>Your token balances:</strong></p>
         <ul>
           {balances.map(([token, amt], idx) => {
             let tokenName = '';
@@ -262,13 +303,8 @@ const App = () => {
             );
           })}
         </ul>
-        <button onClick={handleFaucet}>Get default tokens (faucet)</button>
-        <button onClick={handleFaucetCircle}>
-          Add ⚪️
-        </button>
-        <button onClick={handleFaucetSquare}>
-          Add 🟦
-        </button>
+        <button onClick={handleFaucetCircle}>Add ⚪️ 1</button>
+        <button onClick={handleFaucetSquare}>Add 🟦 1</button>
       </section>
 
       <section className="create-section">
@@ -284,12 +320,27 @@ const App = () => {
           value={newDescription}
           onChange={(e) => setNewDescription(e.target.value)}
         />
+        <label>
+          Duration (seconds, max 600):
+          <input
+            type="number"
+            min="1"
+            max="600"
+            value={newDuration}
+            onChange={(e) => setNewDuration(e.target.value)}
+          />
+        </label>
         <button onClick={handleCreateResolution}>Create</button>
       </section>
 
       <section className="list-section">
-        <h2>All resolutions</h2>
-        {renderResolutions()}
+        <h2>Active resolutions</h2>
+        {renderResolutions(activeResolutions, false)}
+      </section>
+
+      <section className="list-section">
+        <h2>Completed resolutions</h2>
+        {renderResolutions(expiredResolutions, true)}
       </section>
 
       {loading && (

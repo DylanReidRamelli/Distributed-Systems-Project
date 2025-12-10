@@ -133,3 +133,48 @@ label {
 ::-moz-placeholder { color: #a1a1aa; }
 :-ms-input-placeholder { color: #a1a1aa; }
 ::placeholder { color: #a1a1aa; }
+
+.resolution-item {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+
+.resolution-item.completed.passed {
+  border-color: #16a34a;
+  background: #ecfdf3;
+}
+
+.resolution-item.completed.failed {
+  border-color: #dc2626;
+  background: #fef2f2;
+}
+
+.status-chip {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.status-chip.passed {
+  color: #14532d;
+  background: #bbf7d0;
+}
+
+.status-chip.failed {
+  color: #7f1d1d;
+  background: #fecdd3;
+}
+
+.timer {
+  color: #d1d5db;
+  font-weight: 600;
+}
+
+.timer.warning {
+  color: #ef4444;
+}

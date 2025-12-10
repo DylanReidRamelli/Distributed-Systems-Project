@@ -27,6 +27,7 @@ persistent actor {
     title : Text;
     description : Text;
     created_at : Nat64;
+    expires_at : Nat64; // expiration timestamp
     for_weight : Nat;
     against_weight : Nat;
     abstain_weight : Nat;
@@ -36,15 +37,20 @@ persistent actor {
 
   stable var resolutions : [Resolution] = [];
   stable var nextId : ResolutionId = 0;
-
-  // balances: (Principal, TokenType, Nat) list
   stable var balances : [(Principal, TokenType, Nat)] = [];
-  stable var votersByResolution : [(ResolutionId, [Principal])] = []; // Saves the voters who has voted
+  stable var votersByResolution : [(ResolutionId, [Principal])] = [];
 
   // ---------- Helpers ----------
 
   func nowNs() : Nat64 {
     Nat64.fromIntWrap(Time.now());
+  };
+
+  func getTokenWeight(token : TokenType) : Nat {
+    switch (token) {
+      case (#Circle) { 1 };
+      case (#Square) { 10 };
+    }
   };
 
   func findResolutionIndex(id : ResolutionId) : ?Nat {
@@ -122,23 +128,20 @@ persistent actor {
     }
   };
 
-// prevents double voting: add hash for votes and rocord voters
-// functions to check double voting
   func hasVoted(id : ResolutionId, who : Principal) : Bool {
     var i : Nat = 0;
     let n = votersByResolution.size();
     while (i < n) {
-      let (rid, voters) = votersByResolution[i];
-      if (rid == id) {
+      let (resId, voters) = votersByResolution[i];
+      if (resId == id) {
         var j : Nat = 0;
         let m = voters.size();
         while (j < m) {
-          if (Principal.equal(voters[j], who)) {
+          if (voters[j] == who) {
             return true;
           };
           j += 1;
         };
-        return false;
       };
       i += 1;
     };
@@ -146,44 +149,47 @@ persistent actor {
   };
 
   func addVoter(id : ResolutionId, who : Principal) {
+    var found = false;
     var i : Nat = 0;
     let n = votersByResolution.size();
-    var found : Bool = false;
-    var updated : [(ResolutionId, [Principal])] = [];
+    var acc : [(ResolutionId, [Principal])] = [];
     while (i < n) {
-      let (rid, voters) = votersByResolution[i];
-      if (rid == id) {
+      let (resId, voters) = votersByResolution[i];
+      if (resId == id) {
         found := true;
-        let newVoters = Array.append<Principal>(voters, [who]);
-        updated := Array.append<(ResolutionId, [Principal])>(updated, [(rid, newVoters)]);
+        acc := Array.append<(ResolutionId, [Principal])>(
+          acc,
+          [(resId, Array.append<Principal>(voters, [who]))]
+        );
       } else {
-        updated := Array.append<(ResolutionId, [Principal])>(updated, [(rid, voters)]);
+        acc := Array.append<(ResolutionId, [Principal])>(acc, [(resId, voters)]);
       };
       i += 1;
     };
     if (not found) {
-      updated := Array.append<(ResolutionId, [Principal])>(updated, [(id, [who])]);
+      acc := Array.append<(ResolutionId, [Principal])>(acc, [(id, [who])]);
     };
-    votersByResolution := updated;
+    votersByResolution := acc;
+  };
+
+  func isExpired(r : Resolution) : Bool {
+    r.expires_at <= nowNs();
   };
 
   // ---------- Public API ----------
 
-  /// Faucet for Circle token: give the caller 1 Circle token.
   public shared ({ caller }) func faucetCircle() : async Nat {
     let current = getBalanceInternal(caller, #Circle);
     setBalance(caller, #Circle, current + 1);
     getBalanceInternal(caller, #Circle);
   };
 
-  /// Faucet for Square token: give the caller 25 Square tokens.
   public shared ({ caller }) func faucetSquare() : async Nat {
     let current = getBalanceInternal(caller, #Square);
-    setBalance(caller, #Square, current + 25);
+    setBalance(caller, #Square, current + 1);
     getBalanceInternal(caller, #Square);
   };
 
-  /// Get all balances for the caller.
   public shared ({ caller }) func getMyBalances() : async [(TokenType, Nat)] {
     var result : [(TokenType, Nat)] = [];
     let n = balances.size();
@@ -198,24 +204,32 @@ persistent actor {
     result;
   };
 
-  /// Create a new resolution.
+  /// Create a new resolution with a time limit (in seconds, max 600 = 10 minutes).
   public shared ({ caller }) func createResolution(
     title : Text,
-    description : Text
+    description : Text,
+    duration_seconds : Nat64
   ) : async { #ok : ResolutionId; #err : Text } {
     if (title == "") {
       return #err("Title cannot be empty");
     };
+    if (duration_seconds == 0 or duration_seconds > 600) {
+      return #err("Duration must be between 1 and 600 seconds (10 minutes)");
+    };
 
     let id = nextId;
     nextId += 1;
+
+    let now = nowNs();
+    let expires = now + (duration_seconds * 1_000_000_000);
 
     let res : Resolution = {
       id = id;
       creator = caller;
       title = title;
       description = description;
-      created_at = nowNs();
+      created_at = now;
+      expires_at = expires;
       for_weight = 0;
       against_weight = 0;
       abstain_weight = 0;
@@ -225,9 +239,16 @@ persistent actor {
     #ok(id);
   };
 
-  /// List all resolutions (visible to everyone).
-  public query func listResolutions() : async [Resolution] {
-    resolutions;
+  /// List all active resolutions (not expired).
+  public query func listActiveResolutions() : async [Resolution] {
+    let now = nowNs();
+    Array.filter<Resolution>(resolutions, func(r) { r.expires_at > now });
+  };
+
+  /// List all expired/done resolutions.
+  public query func listExpiredResolutions() : async [Resolution] {
+    let now = nowNs();
+    Array.filter<Resolution>(resolutions, func(r) { r.expires_at <= now });
   };
 
   /// Get a single resolution by id.
@@ -238,7 +259,7 @@ persistent actor {
     }
   };
 
-  /// Vote on a resolution with a token amount and type.
+  /// Vote on a resolution with token amount and type.
   public shared ({ caller }) func voteResolution(
     id : ResolutionId,
     choice : VoteChoice,
@@ -248,6 +269,10 @@ persistent actor {
 
     if (amount == 0) {
       return #err("Amount must be > 0");
+    };
+
+    if (hasVoted(id, caller)) {
+      return #err("You have already voted on this resolution");
     };
 
     let bal = getBalanceInternal(caller, token);
@@ -260,13 +285,21 @@ persistent actor {
         return #err("Resolution not found");
       };
       case (?idx) {
-        if (hasVoted(id, caller)) {
-          return #err("You has already voted for this post");
-        };
         let r = resolutions[idx];
 
-        // spend tokens
+        if (isExpired(r)) {
+          return #err("Resolution has expired");
+        };
+
+        // Calculate weighted vote
+        let tokenWeight = getTokenWeight(token);
+        let voteWeight = amount * tokenWeight;
+
+        // Spend tokens
         setBalance(caller, token, bal - amount);
+
+        // Record voter
+        addVoter(id, caller);
 
         let updated : Resolution = switch (choice) {
           case (#For) {
@@ -276,7 +309,8 @@ persistent actor {
               title = r.title;
               description = r.description;
               created_at = r.created_at;
-              for_weight = r.for_weight + amount;
+              expires_at = r.expires_at;
+              for_weight = r.for_weight + voteWeight;
               against_weight = r.against_weight;
               abstain_weight = r.abstain_weight;
             }
@@ -288,8 +322,9 @@ persistent actor {
               title = r.title;
               description = r.description;
               created_at = r.created_at;
+              expires_at = r.expires_at;
               for_weight = r.for_weight;
-              against_weight = r.against_weight + amount;
+              against_weight = r.against_weight + voteWeight;
               abstain_weight = r.abstain_weight;
             }
           };
@@ -300,15 +335,15 @@ persistent actor {
               title = r.title;
               description = r.description;
               created_at = r.created_at;
+              expires_at = r.expires_at;
               for_weight = r.for_weight;
               against_weight = r.against_weight;
-              abstain_weight = r.abstain_weight + amount;
+              abstain_weight = r.abstain_weight + voteWeight;
             }
           };
         };
 
         replaceResolutionAt(idx, updated);
-        addVoter(id, caller);
         #ok(updated);
       };
     };
