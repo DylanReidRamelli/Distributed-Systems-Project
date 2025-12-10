@@ -3,8 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { resolution_voting_dapp_backend } from 'declarations/resolution_voting_dapp_backend';
 
 const TOKEN_TYPES = [
-  { label: 'Circle', value: 'Circle' },
-  { label: 'Square', value: 'Square' }
+  { label: 'Circle', value: 'Circle', emoji: '⚪️' },
+  { label: 'Square', value: 'Square', emoji: '🟦' }
 ];
 
 const App = () => {
@@ -46,14 +46,14 @@ const App = () => {
   };
 
   useEffect(() => {
-    loadData();
+    loadData(); // Load resolutions on page load
   }, []);
 
   const handleFaucet = async () => {
     try {
       showLoading();
-      const newBal = await resolution_voting_dapp_backend.faucet();
-      await loadData();
+      await resolution_voting_dapp_backend.faucet();
+      await loadData(); // Refresh data after faucet
     } catch (err) {
       console.error('Error calling faucet', err);
     } finally {
@@ -65,7 +65,7 @@ const App = () => {
     try {
       showLoading();
       await resolution_voting_dapp_backend.faucetCircle();
-      await loadData();
+      await loadData(); // Refresh data after faucet
     } catch (err) {
       console.error('Error calling circle faucet', err);
     } finally {
@@ -77,7 +77,7 @@ const App = () => {
     try {
       showLoading();
       await resolution_voting_dapp_backend.faucetSquare();
-      await loadData();
+      await loadData(); // Refresh data after faucet
     } catch (err) {
       console.error('Error calling square faucet', err);
     } finally {
@@ -95,13 +95,14 @@ const App = () => {
 
     try {
       showLoading();
+      // Pass both title and description
       const result = await resolution_voting_dapp_backend.createResolution(title, desc);
       if ('err' in result) {
         alert(`Error: ${result.err}`);
       } else {
         setNewTitle('');
         setNewDescription('');
-        await loadData();
+        await loadData(); // Refresh resolutions after creating
       }
     } catch (err) {
       console.error('Error creating resolution', err);
@@ -150,7 +151,7 @@ const App = () => {
         alert(`Error: ${result.err}`);
       } else {
         setVoteAmount('');
-        await loadData();
+        await loadData(); // Refresh resolutions after voting
       }
     } catch (err) {
       console.error('Error voting', err);
@@ -202,7 +203,9 @@ const App = () => {
                     }}
                   >
                     {TOKEN_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
+                      <option key={t.value} value={t.value}>
+                        {t.emoji} {t.label}
+                      </option>
                     ))}
                   </select>
                 </label>
@@ -232,21 +235,40 @@ const App = () => {
   return (
     <div className="app-container">
       <h1>Resolution Voting Dapp</h1>
+      <p style={{ maxWidth: 600, margin: "0 auto 1.5em auto", color: "#444" }}>
+        This app lets you create resolutions, receive different types of tokens, and vote on resolutions using your tokens. 
+        Each token type has a different value. Use the buttons to add tokens to your balance, create new resolutions, and participate in voting by selecting your preferred token and vote type.
+      </p>
 
       <section className="balance-section">
         <p>
           <strong>Your token balances:</strong>
         </p>
         <ul>
-          {balances.map(([token, amt], idx) => (
-            <li key={idx}>
-              {token.hasOwnProperty('Circle') && 'Circle'}{token.hasOwnProperty('Square') && 'Square'}: {Number(amt)}
-            </li>
-          ))}
+          {balances.map(([token, amt], idx) => {
+            let tokenName = '';
+            let emoji = '';
+            if (token.hasOwnProperty('Circle')) {
+              tokenName = 'Circle';
+              emoji = '⚪️';
+            } else if (token.hasOwnProperty('Square')) {
+              tokenName = 'Square';
+              emoji = '🟦';
+            }
+            return (
+              <li key={idx}>
+                {emoji} {tokenName}: {Number(amt)}
+              </li>
+            );
+          })}
         </ul>
         <button onClick={handleFaucet}>Get default tokens (faucet)</button>
-        <button onClick={handleFaucetCircle}>Get Circle token (1)</button>
-        <button onClick={handleFaucetSquare}>Get Square token (25)</button>
+        <button onClick={handleFaucetCircle}>
+          Add ⚪️
+        </button>
+        <button onClick={handleFaucetSquare}>
+          Add 🟦
+        </button>
       </section>
 
       <section className="create-section">
