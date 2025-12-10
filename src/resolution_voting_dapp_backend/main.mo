@@ -3,6 +3,7 @@ import Nat "mo:base/Nat";
 import Nat64 "mo:base/Nat64";
 import Time "mo:base/Time";
 import Array "mo:base/Array";
+import Text "mo:base/Text";
 
 persistent actor {
 
@@ -232,6 +233,15 @@ persistent actor {
   ) : async { #ok : ResolutionId; #err : Text } {
     if (title == "") {
       return #err("Title cannot be empty");
+    };
+    if (Text.size(title) > 200) {
+      return #err("Title too long (max 200 chars)");
+    };
+    if (description == "") {
+      return #err("Description cannot be empty");
+    };
+    if (Text.size(description) > 2000) {
+      return #err("Description too long (max 2000 chars)");
     };
     if (duration_seconds == 0 or duration_seconds > 600) {
       return #err("Duration must be between 1 and 600 seconds (10 minutes)");
