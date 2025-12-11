@@ -46,14 +46,11 @@ persistent actor {
     weight : Nat;
   };
 
-  // ---------- Stable state ----------
-
   stable var resolutions : [Resolution] = [];
   stable var nextId : ResolutionId = 0;
   stable var balances : [(Principal, TokenType, Nat)] = [];
   stable var votesByResolution : [(ResolutionId, [VoteRecord])] = [];
 
-  // ---------- Helpers ----------
 
   func nowNs() : Nat64 {
     Nat64.fromIntWrap(Time.now());
