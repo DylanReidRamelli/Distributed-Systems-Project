@@ -7,6 +7,8 @@ import {
 } from 'declarations/resolution_voting_dapp_backend';
 import { Actor, HttpAgent } from '@dfinity/agent';
 
+
+// Types of tokens available for voting
 const TOKEN_TYPES = [
   { label: 'Circle', value: 'Circle', emoji: '⚪️', weight: 1 },
   { label: 'Square', value: 'Square', emoji: '🟦', weight: 10 },
@@ -16,12 +18,15 @@ const TOKEN_TYPES = [
 
 const profiles = {};
 
+
+// Creating profiles with unique identities
 function createProfile(name) {
   const id = Ed25519KeyIdentity.generate();
   profiles[name] = id;
   return id;
 }
 
+// Switching profiles and creating corresponding actors
 async function switchProfile(name) {
   const identity = profiles[name] || createProfile(name);
   const agent = new HttpAgent({ identity, host: window.location.origin });
@@ -64,7 +69,8 @@ const App = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // ---- Switch profile ----
+
+  // Handle swithcing
   const handleSwitchProfile = async (profileName) => {
     try {
       showLoading();
@@ -80,7 +86,8 @@ const App = () => {
     }
   };
 
-  // ---- Data loading ----
+
+
   const loadData = async (whichActor = actor, skipSettle = false, showLoadingOverlay = true) => {
     try {
       if (showLoadingOverlay) showLoading();
@@ -120,7 +127,7 @@ const App = () => {
     return () => clearInterval(interval);
   }, [actor]);
 
-  // ---- Actions ----
+  
   const handleFaucetCircle = async () => {
     try {
       showLoading();

@@ -20,8 +20,8 @@ persistent actor {
   public type TokenType = {
     #Circle;
     #Square;
-    #Triangle;   // NEW
-    #Pentagon;   // NEW
+    #Triangle;
+    #Pentagon;
   };
 
   public type Resolution = {
@@ -34,7 +34,7 @@ persistent actor {
     for_weight : Nat;
     against_weight : Nat;
     abstain_weight : Nat;
-    settled : Bool;              // NEW: has rewards been paid
+    settled : Bool;     
   };
 
   // Record full vote details
@@ -42,8 +42,8 @@ persistent actor {
     voter : Principal;
     choice : VoteChoice;
     token : TokenType;
-    amount : Nat;   // raw tokens staked
-    weight : Nat;   // weighted amount used in tally
+    amount : Nat;
+    weight : Nat;
   };
 
   // ---------- Stable state ----------
@@ -63,8 +63,8 @@ persistent actor {
     switch (token) {
       case (#Circle) { 1 };
       case (#Square) { 10 };
-      case (#Triangle) { 20 };   // NEW
-      case (#Pentagon) { 30 };   // NEW
+      case (#Triangle) { 20 };
+      case (#Pentagon) { 30 };
     }
   };
 
@@ -210,8 +210,6 @@ persistent actor {
     r.expires_at <= nowNs();
   };
 
-  // ---------- Public API ----------
-
   public shared ({ caller }) func faucetCircle() : async Nat {
     let current = getBalanceInternal(caller, #Circle);
     setBalance(caller, #Circle, current + 1);
@@ -354,7 +352,7 @@ persistent actor {
         // Spend tokens
         setBalance(caller, token, bal - amount);
 
-        // Record voter (store full vote record)
+        // Record voter
         let now = nowNs();
         let voteRec : VoteRecord = {
           voter = caller;
