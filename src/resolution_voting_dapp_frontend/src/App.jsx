@@ -108,11 +108,6 @@ const App = () => {
     })();
   }, []);
 
-  useEffect(() => {
-    const interval = setInterval(() => loadData(actor), 5000);
-    return () => clearInterval(interval);
-  }, [actor]);
-
   // ---- Actions ----
   const handleFaucetCircle = async () => {
     try {
@@ -227,9 +222,42 @@ const App = () => {
     }
   };
 
+  // Helper: export votes to CSV
+  const exportVotesToCSV = (votes, resolutionTitle) => {
+    if (!votes || votes.length === 0) {
+      alert('No votes to export');
+      return;
+    }
+
+    let csv = 'Voter Principal,Choice,Token Type,Amount,Weight,Timestamp\n';
+    votes.forEach((v) => {
+      const voter = v.voter.toText ? v.voter.toText() : String(v.voter);
+      const choice = v.choice.hasOwnProperty('For')
+        ? 'For'
+        : v.choice.hasOwnProperty('Against')
+        ? 'Against'
+        : 'Abstain';
+      const token = v.token.hasOwnProperty('Circle') ? 'Circle' : 'Square';
+      const timestamp = new Date(Number(v.timestamp) / 1_000_000).toISOString();
+      csv += `"${voter}","${choice}","${token}",${v.amount},${v.weight},"${timestamp}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${resolutionTitle.replace(/\s+/g, '_')}_votes.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
+
   const renderResolutions = (resolutions, isExpired = false) => {
     if (!resolutions || resolutions.length === 0) {
-      return <p>No {isExpired ? 'completed' : 'active'} resolutions yet.</p>;
+      return <p style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+        {isExpired ? '🎉 No completed resolutions yet.' : '📋 No active resolutions yet.'}
+      </p>;
     }
 
     return (
@@ -268,8 +296,9 @@ const App = () => {
                 <strong>Abstain:</strong> {Number(r.abstain_weight)}
               </p>
               {isExpired && (
-                <div style={{ marginTop: '0.5rem' }}>
+                <div style={{ marginTop: '1rem', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <button
+                    className="btn-secondary btn-small"
                     onClick={async () => {
                       const key = String(id);
                       const currentlyVisible = !!votesVisible[key];
@@ -295,44 +324,52 @@ const App = () => {
                       }
                     }}
                   >
-                    {votesVisible[String(id)] ? 'Hide votes' : 'Show votes'}
+                    {votesVisible[String(id)] ? '👁️ Hide votes' : '👁️ Show votes'}
                   </button>
-                  {votesVisible[String(id)] && votesByResolution[String(id)] && (
-                    <div className="votes-list" style={{ marginTop: '0.5rem' }}>
-                      <h4>Votes</h4>
-                      {votesByResolution[String(id)].length === 0 ? (
-                        <p>No votes recorded.</p>
-                      ) : (
-                        <ul>
-                          {votesByResolution[String(id)].map((v, idx) => {
-                            let voterText = '';
-                            try {
-                              voterText = v.voter.toText ? v.voter.toText() : String(v.voter);
-                            } catch (e) {
-                              voterText = String(v.voter);
-                            }
-                            const choice = v.choice.hasOwnProperty('For')
-                              ? 'For'
-                              : v.choice.hasOwnProperty('Against')
-                              ? 'Against'
-                              : 'Abstain';
-                            const token = v.token.hasOwnProperty('Circle') ? 'Circle' : 'Square';
-                            return (
-                              <li key={idx}>
-                                <strong>{voterText}</strong>: {choice} — {token} x {Number(v.amount)} (weight: {Number(v.weight)})
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </div>
+                  {votesByResolution[String(id)] && votesByResolution[String(id)].length > 0 && (
+                    <button
+                      className="btn-secondary btn-small"
+                      onClick={() => exportVotesToCSV(votesByResolution[String(id)], r.title)}
+                    >
+                      📥 Export CSV
+                    </button>
+                  )}
+                </div>
+              )}
+              {votesVisible[String(id)] && votesByResolution[String(id)] && (
+                <div className="votes-list" style={{ marginTop: '0.5rem' }}>
+                  <h4>Votes</h4>
+                  {votesByResolution[String(id)].length === 0 ? (
+                    <p>No votes recorded.</p>
+                  ) : (
+                    <ul>
+                      {votesByResolution[String(id)].map((v, idx) => {
+                        let voterText = '';
+                        try {
+                          voterText = v.voter.toText ? v.voter.toText() : String(v.voter);
+                        } catch (e) {
+                          voterText = String(v.voter);
+                        }
+                        const choice = v.choice.hasOwnProperty('For')
+                          ? 'For'
+                          : v.choice.hasOwnProperty('Against')
+                          ? 'Against'
+                          : 'Abstain';
+                        const token = v.token.hasOwnProperty('Circle') ? 'Circle' : 'Square';
+                        return (
+                          <li key={idx}>
+                            <strong>{voterText}</strong>: {choice} — {token} x {Number(v.amount)} (weight: {Number(v.weight)})
+                          </li>
+                        );
+                      })}
+                    </ul>
                   )}
                 </div>
               )}
               {!isExpired && (
                 <div className="vote-form">
                   <label>
-                    Vote type:{' '}
+                    🗳️ Vote choice:{' '}
                     <select
                       value={selectedResolutionId === id ? voteChoice : voteChoice}
                       onChange={(e) => {
@@ -340,13 +377,13 @@ const App = () => {
                         setVoteChoice(e.target.value);
                       }}
                     >
-                      <option value="For">For</option>
-                      <option value="Against">Against</option>
-                      <option value="Abstain">Abstain</option>
+                      <option value="For">✅ For</option>
+                      <option value="Against">❌ Against</option>
+                      <option value="Abstain">⚪ Abstain</option>
                     </select>
                   </label>
                   <label>
-                    Token type:{' '}
+                    💰 Token type:{' '}
                     <select
                       value={selectedResolutionId === id ? voteTokenType : voteTokenType}
                       onChange={(e) => {
@@ -362,7 +399,7 @@ const App = () => {
                     </select>
                   </label>
                   <label>
-                    Amount:{' '}
+                    📊 Amount:{' '}
                     <input
                       type="number"
                       min="1"
@@ -373,7 +410,7 @@ const App = () => {
                       }}
                     />
                   </label>
-                  <button onClick={() => handleVote(id)}>Vote</button>
+                  <button className="btn-primary btn-small" onClick={() => handleVote(id)}>✅ Vote</button>
                 </div>
               )}
             </li>
@@ -387,25 +424,26 @@ const App = () => {
     <div className="app-container">
       <h1>Resolution Voting Dapp</h1>
 
-      <div className="auth-bar" style={{ marginBottom: '1rem' }}>
-        <span>Current user: {currentProfile}</span>
-        <span style={{ marginLeft: '1rem', fontSize: '0.85rem', color: '#888' }}>
-          Principal: {principalText.slice(0, 15)}...
+      <div className="auth-bar">
+        <span>👤 {currentProfile}</span>
+        <span style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+          {principalText ? principalText.slice(0, 20) + '...' : 'Loading...'}
         </span>
-        <div style={{ marginLeft: '1rem' }}>
-          <button onClick={() => handleSwitchProfile('User 1')}>User 1</button>
-          <button onClick={() => handleSwitchProfile('User 2')} style={{ marginLeft: '0.5rem' }}>User 2</button>
-          <button onClick={() => handleSwitchProfile('User 3')} style={{ marginLeft: '0.5rem' }}>User 3</button>
+        <div>
+          <button onClick={() => handleSwitchProfile('User 1')} className={currentProfile === 'User 1' ? 'active' : ''}>User 1</button>
+          <button onClick={() => handleSwitchProfile('User 2')} className={currentProfile === 'User 2' ? 'active' : ''}>User 2</button>
+          <button onClick={() => handleSwitchProfile('User 3')} className={currentProfile === 'User 3' ? 'active' : ''}>User 3</button>
         </div>
       </div>
 
-      <p style={{ maxWidth: 600, margin: "0 auto 1.5em auto", color: "#444" }}>
-        This app lets you create resolutions with timers, receive different types of tokens with different weights, 
-        and vote on resolutions. Circle tokens have weight 1, Square tokens have weight 10.
+      <p style={{ textAlign: 'center', maxWidth: 700, margin: "0 auto 2em auto", color: "#b0b3c1", fontSize: '1rem', lineHeight: '1.7' }}>
+        📋 Create resolutions with timers, earn different tokens with different voting weights, and vote on proposals.
+        <br />
+        <small>⚪ Circle = 1x weight | 🟦 Square = 10x weight</small>
       </p>
 
       <section className="balance-section">
-        <p><strong>Your token balances:</strong></p>
+        <h3 style={{ marginTop: 0 }}>💰 Your Token Balances</h3>
         <ul>
           {balances.map(([token, amt], idx) => {
             let tokenName = '';
@@ -416,35 +454,45 @@ const App = () => {
             else if (token.hasOwnProperty('Pentagon')) { tokenName = 'Pentagon'; emoji = '⬟'; }
             return (
               <li key={idx}>
+<<<<<<< Updated upstream
                 <span className={`token-emoji ${tokenName.toLowerCase()}`}>{emoji}</span>
                 {tokenName}: {Number(amt)}
+=======
+                {emoji} <strong>{tokenName}</strong>: {Number(amt)}
+>>>>>>> Stashed changes
               </li>
             );
           })}
         </ul>
+<<<<<<< Updated upstream
         <div className="token-buttons">
           <button className="token-btn circle" onClick={handleFaucetCircle}>Add ⚪️ 1</button>
           <button className="token-btn square" onClick={handleFaucetSquare}>Add 🟦 1</button>
           <button className="token-btn triangle" onClick={handleFaucetTriangle}>Add 🔺 1</button>
           <button className="token-btn pentagon" onClick={handleFaucetPentagon}>Add ⬟ 1</button>
+=======
+        <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+          <button className="btn-primary" onClick={handleFaucetCircle}>⚪️ Get Circle Token</button>
+          <button className="btn-primary" onClick={handleFaucetSquare}>🟦 Get Square Token</button>
+>>>>>>> Stashed changes
         </div>
       </section>
 
       <section className="create-section">
-        <h2>Create a new resolution</h2>
+        <h2>➕ Create a New Resolution</h2>
         <input
           type="text"
-          placeholder="Resolution title"
+          placeholder="📌 Resolution title (e.g., Approve Budget 2024)"
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
         />
         <textarea
-          placeholder="Resolution description"
+          placeholder="📝 Description (explain the proposal in detail)"
           value={newDescription}
           onChange={(e) => setNewDescription(e.target.value)}
         />
         <label>
-          Duration (seconds, max 600):
+          ⏱️ Duration (seconds, max 600):
           <input
             type="number"
             min="1"
@@ -453,16 +501,16 @@ const App = () => {
             onChange={(e) => setNewDuration(e.target.value)}
           />
         </label>
-        <button onClick={handleCreateResolution}>Create</button>
+        <button className="btn-primary" onClick={handleCreateResolution}>✨ Create Resolution</button>
       </section>
 
       <section className="list-section">
-        <h2>Active resolutions</h2>
+        <h2>🔵 Active Resolutions</h2>
         {renderResolutions(activeResolutions, false)}
       </section>
 
       <section className="list-section">
-        <h2>Completed resolutions</h2>
+        <h2>✅ Completed Resolutions</h2>
         {renderResolutions(expiredResolutions, true)}
       </section>
 
@@ -474,5 +522,6 @@ const App = () => {
     </div>
   );
 };
+
 
 export default App;
