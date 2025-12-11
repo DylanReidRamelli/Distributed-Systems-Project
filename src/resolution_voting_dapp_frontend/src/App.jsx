@@ -51,13 +51,18 @@ const App = () => {
   const [newDescription, setNewDescription] = useState('');
   const [newDuration, setNewDuration] = useState(60);
 
-  const [voteAmount, setVoteAmount] = useState('');
-  const [voteChoice, setVoteChoice] = useState('For');
-  const [voteTokenType, setVoteTokenType] = useState('Circle');
-  const [selectedResolutionId, setSelectedResolutionId] = useState(null);
+  const [votesByResolutionForm, setVotesByResolutionForm] = useState({}); 
+  // structure: { resolutionId: { amount: '', choice: 'For', tokenType: 'Circle' } }
+
+  const [clientTime, setClientTime] = useState(Date.now());
 
   const showLoading = () => setLoading(true);
   const hideLoading = () => setLoading(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => setClientTime(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // ---- Switch profile ----
   const handleSwitchProfile = async (profileName) => {
@@ -76,11 +81,12 @@ const App = () => {
   };
 
   // ---- Data loading ----
-  const loadData = async (whichActor = actor) => {
+  const loadData = async (whichActor = actor, skipSettle = false, showLoadingOverlay = true) => {
     try {
-      showLoading();
-      // settle expired first
-      await whichActor.settleExpired();
+      if (showLoadingOverlay) showLoading();
+      if (!skipSettle) {
+        await whichActor.settleExpired();
+      }
 
       const [activeRes, expiredRes, myBals] = await Promise.all([
         whichActor.listActiveResolutions(),
@@ -97,7 +103,7 @@ const App = () => {
       setExpiredResolutions([]);
       setBalances([]);
     } finally {
-      hideLoading();
+      if (showLoadingOverlay) hideLoading();
     }
   };
 
@@ -107,6 +113,12 @@ const App = () => {
       await handleSwitchProfile('User 1');
     })();
   }, []);
+
+  // Call without loading overlay on frequent refreshes
+  useEffect(() => {
+    const interval = setInterval(() => loadData(actor, true, false), 5000); // skip settle & loading overlay
+    return () => clearInterval(interval);
+  }, [actor]);
 
   // ---- Actions ----
   const handleFaucetCircle = async () => {
@@ -180,25 +192,39 @@ const App = () => {
     }
   };
 
+  // Helper to get vote form state for a resolution
+  const getVoteFormState = (resId) => {
+    return votesByResolutionForm[resId] || { amount: '', choice: 'For', tokenType: 'Circle' };
+  };
+
+  // Helper to update vote form state for a resolution
+  const updateVoteFormState = (resId, updates) => {
+    setVotesByResolutionForm((prev) => ({
+      ...prev,
+      [resId]: { ...getVoteFormState(resId), ...updates },
+    }));
+  };
+
   const handleVote = async (resolutionId) => {
-    const amount = Number(voteAmount);
+    const formState = getVoteFormState(resolutionId);
+    const amount = Number(formState.amount);
     if (!amount || amount <= 0) {
       alert('Please enter a positive vote amount');
       return;
     }
 
     let choiceVariant =
-      voteChoice === 'For'
+      formState.choice === 'For'
         ? { For: null }
-        : voteChoice === 'Against'
+        : formState.choice === 'Against'
         ? { Against: null }
         : { Abstain: null };
 
     let tokenVariant =
-      voteTokenType === 'Circle' ? { Circle: null } :
-      voteTokenType === 'Square' ? { Square: null } :
-      voteTokenType === 'Triangle' ? { Triangle: null } :
-      voteTokenType === 'Pentagon' ? { Pentagon: null } : null;
+      formState.tokenType === 'Circle' ? { Circle: null } :
+      formState.tokenType === 'Square' ? { Square: null } :
+      formState.tokenType === 'Triangle' ? { Triangle: null } :
+      formState.tokenType === 'Pentagon' ? { Pentagon: null } : null;
     if (!tokenVariant) { alert('Invalid token type'); return; }
 
     try {
@@ -212,7 +238,8 @@ const App = () => {
       if ('err' in result) {
         alert(`Error: ${result.err}`);
       } else {
-        setVoteAmount('');
+        // Clear this resolution's form after voting
+        updateVoteFormState(resolutionId, { amount: '', choice: 'For', tokenType: 'Circle' });
         await loadData();
       }
     } catch (err) {
@@ -264,8 +291,8 @@ const App = () => {
       <ul className="resolution-list">
         {resolutions.map((r) => {
           const id = Number(r.id);
-          const timeLeft = Number(r.expires_at) - Date.now() * 1_000_000;
-          const secondsLeft = Math.max(0, Math.floor(timeLeft / 1_000_000_000));
+          const timeLeftMs = Number(r.expires_at) / 1_000_000 - clientTime;
+          const secondsLeft = Math.max(0, Math.floor(timeLeftMs / 1000));
           const mins = Math.floor(secondsLeft / 60);
           const secs = secondsLeft % 60;
           const timeText = `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -371,11 +398,8 @@ const App = () => {
                   <label>
                     🗳️ Vote choice:{' '}
                     <select
-                      value={selectedResolutionId === id ? voteChoice : voteChoice}
-                      onChange={(e) => {
-                        setSelectedResolutionId(id);
-                        setVoteChoice(e.target.value);
-                      }}
+                      value={getVoteFormState(id).choice}
+                      onChange={(e) => updateVoteFormState(id, { choice: e.target.value })}
                     >
                       <option value="For">✅ For</option>
                       <option value="Against">❌ Against</option>
@@ -385,11 +409,8 @@ const App = () => {
                   <label>
                     💰 Token type:{' '}
                     <select
-                      value={selectedResolutionId === id ? voteTokenType : voteTokenType}
-                      onChange={(e) => {
-                        setSelectedResolutionId(id);
-                        setVoteTokenType(e.target.value);
-                      }}
+                      value={getVoteFormState(id).tokenType}
+                      onChange={(e) => updateVoteFormState(id, { tokenType: e.target.value })}
                     >
                       {TOKEN_TYPES.map((t) => (
                         <option key={t.value} value={t.value}>
@@ -403,11 +424,8 @@ const App = () => {
                     <input
                       type="number"
                       min="1"
-                      value={selectedResolutionId === id ? voteAmount : ''}
-                      onChange={(e) => {
-                        setSelectedResolutionId(id);
-                        setVoteAmount(e.target.value);
-                      }}
+                      value={getVoteFormState(id).amount}
+                      onChange={(e) => updateVoteFormState(id, { amount: e.target.value })}
                     />
                   </label>
                   <button className="btn-primary btn-small" onClick={() => handleVote(id)}>✅ Vote</button>
@@ -436,10 +454,25 @@ const App = () => {
         </div>
       </div>
 
-      <p style={{ textAlign: 'center', maxWidth: 700, margin: "0 auto 2em auto", color: "#b0b3c1", fontSize: '1rem', lineHeight: '1.7' }}>
-        📋 Create resolutions with timers, earn different tokens with different voting weights, and vote on proposals.
+      <p style={{ textAlign: 'center', maxWidth: 800, margin: "0 auto 2em auto", color: "#6b7280", fontSize: '0.95rem', lineHeight: '1.8' }}>
+        <strong>📋 How to Use This Voting DApp</strong>
         <br />
-        <small>⚪ Circle = 1x weight | 🟦 Square = 10x weight</small>
+        <br />
+        <strong>1️⃣ Get Tokens:</strong> Click the token buttons below to earn voting power. Each token type has a different weight:
+        <br />
+        <small>⚪ Circle = 1x | 🟦 Square = 10x | 🔺 Triangle = 20x | ⬟ Pentagon = 30x</small>
+        <br />
+        <br />
+        <strong>2️⃣ Create Resolutions:</strong> Propose new resolutions with a title, description, and voting duration (1-600 seconds).
+        <br />
+        <br />
+        <strong>3️⃣ Vote:</strong> Choose a stance (For/Against/Abstain), select a token type, and vote with your tokens. Your vote weight = token amount × token weight.
+        <br />
+        <br />
+        <strong>4️⃣ Wait for Results:</strong> When the timer expires, the resolution is settled. Winners receive their tokens back + 50% of all staked tokens as a Circle token bonus (split proportionally).
+        <br />
+        <br />
+        <strong>5️⃣ Switch Users:</strong> Use the user selector above to simulate multiple voters and test the system locally.
       </p>
 
       <section className="balance-section">
@@ -454,27 +487,17 @@ const App = () => {
             else if (token.hasOwnProperty('Pentagon')) { tokenName = 'Pentagon'; emoji = '⬟'; }
             return (
               <li key={idx}>
-<<<<<<< Updated upstream
                 <span className={`token-emoji ${tokenName.toLowerCase()}`}>{emoji}</span>
                 {tokenName}: {Number(amt)}
-=======
-                {emoji} <strong>{tokenName}</strong>: {Number(amt)}
->>>>>>> Stashed changes
               </li>
             );
           })}
         </ul>
-<<<<<<< Updated upstream
         <div className="token-buttons">
           <button className="token-btn circle" onClick={handleFaucetCircle}>Add ⚪️ 1</button>
           <button className="token-btn square" onClick={handleFaucetSquare}>Add 🟦 1</button>
           <button className="token-btn triangle" onClick={handleFaucetTriangle}>Add 🔺 1</button>
           <button className="token-btn pentagon" onClick={handleFaucetPentagon}>Add ⬟ 1</button>
-=======
-        <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
-          <button className="btn-primary" onClick={handleFaucetCircle}>⚪️ Get Circle Token</button>
-          <button className="btn-primary" onClick={handleFaucetSquare}>🟦 Get Square Token</button>
->>>>>>> Stashed changes
         </div>
       </section>
 
