@@ -10,6 +10,8 @@ import { Actor, HttpAgent } from '@dfinity/agent';
 const TOKEN_TYPES = [
   { label: 'Circle', value: 'Circle', emoji: '⚪️', weight: 1 },
   { label: 'Square', value: 'Square', emoji: '🟦', weight: 10 },
+  { label: 'Triangle', value: 'Triangle', emoji: '🔺', weight: 20 },
+  { label: 'Pentagon', value: 'Pentagon', emoji: '⬟', weight: 30 },
 ];
 
 const profiles = {};
@@ -77,6 +79,9 @@ const App = () => {
   const loadData = async (whichActor = actor) => {
     try {
       showLoading();
+      // settle expired first
+      await whichActor.settleExpired();
+
       const [activeRes, expiredRes, myBals] = await Promise.all([
         whichActor.listActiveResolutions(),
         whichActor.listExpiredResolutions(),
@@ -133,6 +138,22 @@ const App = () => {
     }
   };
 
+  const handleFaucetTriangle = async () => {
+    try {
+      showLoading();
+      await actor.faucetTriangle();
+      await loadData();
+    } finally { hideLoading(); }
+  };
+
+  const handleFaucetPentagon = async () => {
+    try {
+      showLoading();
+      await actor.faucetPentagon();
+      await loadData();
+    } finally { hideLoading(); }
+  };
+
   const handleCreateResolution = async () => {
     const title = newTitle.trim();
     const desc = newDescription.trim();
@@ -179,7 +200,11 @@ const App = () => {
         : { Abstain: null };
 
     let tokenVariant =
-      voteTokenType === 'Circle' ? { Circle: null } : { Square: null };
+      voteTokenType === 'Circle' ? { Circle: null } :
+      voteTokenType === 'Square' ? { Square: null } :
+      voteTokenType === 'Triangle' ? { Triangle: null } :
+      voteTokenType === 'Pentagon' ? { Pentagon: null } : null;
+    if (!tokenVariant) { alert('Invalid token type'); return; }
 
     try {
       showLoading();
@@ -385,22 +410,24 @@ const App = () => {
           {balances.map(([token, amt], idx) => {
             let tokenName = '';
             let emoji = '';
-            if (token.hasOwnProperty('Circle')) {
-              tokenName = 'Circle';
-              emoji = '⚪️';
-            } else if (token.hasOwnProperty('Square')) {
-              tokenName = 'Square';
-              emoji = '🟦';
-            }
+            if (token.hasOwnProperty('Circle')) { tokenName = 'Circle'; emoji = '⚪️'; }
+            else if (token.hasOwnProperty('Square')) { tokenName = 'Square'; emoji = '🟦'; }
+            else if (token.hasOwnProperty('Triangle')) { tokenName = 'Triangle'; emoji = '🔺'; }
+            else if (token.hasOwnProperty('Pentagon')) { tokenName = 'Pentagon'; emoji = '⬟'; }
             return (
               <li key={idx}>
-                {emoji} {tokenName}: {Number(amt)}
+                <span className={`token-emoji ${tokenName.toLowerCase()}`}>{emoji}</span>
+                {tokenName}: {Number(amt)}
               </li>
             );
           })}
         </ul>
-        <button onClick={handleFaucetCircle}>Add ⚪️ 1</button>
-        <button onClick={handleFaucetSquare}>Add 🟦 1</button>
+        <div className="token-buttons">
+          <button className="token-btn circle" onClick={handleFaucetCircle}>Add ⚪️ 1</button>
+          <button className="token-btn square" onClick={handleFaucetSquare}>Add 🟦 1</button>
+          <button className="token-btn triangle" onClick={handleFaucetTriangle}>Add 🔺 1</button>
+          <button className="token-btn pentagon" onClick={handleFaucetPentagon}>Add ⬟ 1</button>
+        </div>
       </section>
 
       <section className="create-section">

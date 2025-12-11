@@ -178,3 +178,41 @@ label {
 .timer.warning {
   color: #ef4444;
 }
+
+.token-emoji {
+  font-size: 1.6rem;
+  margin-right: 6px;
+  display: inline-block;
+  vertical-align: middle;
+  background: linear-gradient(90deg, #ff4d4f, #ff7a45, #fadb14, #52c41a, #1890ff, #722ed1, #eb2f96);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.token-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.token-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.12s ease;
+  font-size: 1rem;
+}
+
+.token-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+.token-btn.circle   { background: linear-gradient(135deg, #ff4d4f, #ff7a45); }
+.token-btn.square   { background: linear-gradient(135deg, #fadb14, #52c41a); }
+.token-btn.triangle { background: linear-gradient(135deg, #1890ff, #722ed1); }
+.token-btn.pentagon { background: linear-gradient(135deg, #eb2f96, #ff4d4f); }
